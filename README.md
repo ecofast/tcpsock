@@ -8,4 +8,4 @@ go server.Serve()</br>
 <-shutdown</br>
 server.Close()</br></br>
 
-There's a more detailed [chatroom](https://github.com/ecofast/tcpsock/tree/master/samples/chatroom) demo available with a custom binary protocol.
+There's a more detailed [chatroom](https://github.com/ecofast/tcpsock/tree/master/samples/chatroom) demo available which uses a custom binary protocol.
