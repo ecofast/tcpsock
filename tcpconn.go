@@ -1,3 +1,6 @@
+// Copyright (C) 2017 ecofast(胡光耀). All rights reserved.
+// Use of this source code is governed by a BSD-style license.
+
 package tcpsock
 
 import (
@@ -6,25 +9,29 @@ import (
 	"sync/atomic"
 )
 
+type OnTcpConnCallback func(c *TcpConn)
+
 type TcpConn struct {
 	id         uint32
-	server     *TcpServer
+	owner      *tcpSock
 	conn       *net.TCPConn
 	sendChan   chan Packet
 	recvChan   chan Packet
 	closeChan  chan struct{}
 	closeOnce  sync.Once
 	closedFlag int32
+	onClose    OnTcpConnCallback
 }
 
-func newTcpConn(id uint32, server *TcpServer, conn *net.TCPConn, sendCap, recvCap uint32) *TcpConn {
+func newTcpConn(id uint32, owner *tcpSock, conn *net.TCPConn, sendCap, recvCap uint32, onClose OnTcpConnCallback) *TcpConn {
 	return &TcpConn{
 		id:        id,
-		server:    server,
+		owner:     owner,
 		conn:      conn,
 		sendChan:  make(chan Packet, sendCap),
 		recvChan:  make(chan Packet, recvCap),
 		closeChan: make(chan struct{}),
+		onClose:   onClose,
 	}
 }
 
@@ -33,9 +40,9 @@ func (self *TcpConn) ID() uint32 {
 }
 
 func (self *TcpConn) run() {
-	startGoroutine(self.reader, self.server.waitGroup)
-	startGoroutine(self.writer, self.server.waitGroup)
-	startGoroutine(self.handler, self.server.waitGroup)
+	startGoroutine(self.reader, self.owner.waitGroup)
+	startGoroutine(self.writer, self.owner.waitGroup)
+	startGoroutine(self.handler, self.owner.waitGroup)
 }
 
 func (self *TcpConn) Close() {
@@ -45,7 +52,9 @@ func (self *TcpConn) Close() {
 		close(self.recvChan)
 		close(self.closeChan)
 		self.conn.Close()
-		self.server.connClose(self)
+		if self.onClose != nil {
+			self.onClose(self)
+		}
 	})
 }
 
@@ -74,7 +83,7 @@ func (self *TcpConn) reader() {
 	buf := make([]byte, RecvBufLenMax)
 	for {
 		select {
-		case <-self.server.exitChan:
+		case <-self.owner.exitChan:
 			return
 
 		case <-self.closeChan:
@@ -87,7 +96,7 @@ func (self *TcpConn) reader() {
 		if err != nil {
 			return
 		}
-		self.server.proto.Parse(buf[:count], self.recvChan)
+		self.owner.proto.Parse(buf[:count], self.recvChan)
 	}
 }
 
@@ -103,7 +112,7 @@ func (self *TcpConn) writer() {
 		}
 
 		select {
-		case <-self.server.exitChan:
+		case <-self.owner.exitChan:
 			return
 
 		case <-self.closeChan:
@@ -129,19 +138,19 @@ func (self *TcpConn) handler() {
 		}
 
 		select {
-		case <-self.server.exitChan:
+		case <-self.owner.exitChan:
 			return
 
 		case <-self.closeChan:
 			return
 
 		case packet := <-self.recvChan:
-			self.server.proto.Process(self, packet)
+			self.owner.proto.Process(self, packet)
 		}
 	}
 }
 
-func (self *TcpConn) Send(p Packet) {
+func (self *TcpConn) Write(p Packet) {
 	if self.Closed() {
 		return
 	}
