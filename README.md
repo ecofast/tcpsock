@@ -4,7 +4,10 @@ Package tcpsock provides easy to use interfaces for TCP I/O.</br></br>
 # How to use</br>
 ## server:
 proto := &YourCustomProtocol{}</br>
+proto.OnMessage(onMsg)</br>
 server := tcpsock.NewTcpServer(listenPort, acceptTimeout, proto)</br>
+server.OnConnConnect(onConnConnect)</br>
+server.OnConnClose(onConnClose)</br>
 go server.Serve()</br>
 <-shutdown</br>
 server.Close()</br></br>
