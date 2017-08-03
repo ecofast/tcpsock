@@ -1,46 +1,61 @@
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"log"
-	"net"
+	"os"
+	"os/signal"
+	"syscall"
 	"tcpsock"
-
-	. "github.com/ecofast/sysutils"
+	. "tcpsock/samples/chatroom/protocol"
 )
 
 const (
 	ServerAddr = ":9999"
-
-	ChatSignature  = 0xFFFFFFFF
-	PacketHeadSize = 4 + 4 + 4
 )
 
 var (
-	conn *net.TCPConn
-	id   uint32
+	shutdown = make(chan bool, 1)
 
-	recvChan = make(chan *ChatPacket)
-	sendChan = make(chan string)
+	tcpConn *tcpsock.TcpConn
+	id      uint32
 )
 
-func main() {
-	connToServer()
-	genID()
-	go run()
-	go process()
-	go input()
-
-	select {}
+func init() {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-signals
+		shutdown <- true
+	}()
 }
 
-func connToServer() {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", ServerAddr)
-	CheckError(err)
-	conn, err = net.DialTCP("tcp", nil, tcpAddr)
-	CheckError(err)
+func main() {
+	genID()
+
+	proto := &ChatProtocol{}
+	proto.OnMessage(onMsg)
+	client := tcpsock.NewTcpClient(ServerAddr, proto)
+	client.OnConnect(onConnect)
+	client.OnClose(onClose)
+	go client.Run()
+	go input()
+	<-shutdown
+	client.Close()
+}
+
+func onConnect(c *tcpsock.TcpConn) {
+	log.Println("successfully connect to server", c.RawConn().RemoteAddr().String())
+	tcpConn = c
+}
+
+func onClose(c *tcpsock.TcpConn) {
+	log.Println("disconnect from server", c.RawConn().RemoteAddr().String())
+	tcpConn = nil
+}
+
+func onMsg(c *tcpsock.TcpConn, p *ChatPacket) {
+	log.Printf("%d: %s\n", p.PlayerID, string(p.Body))
 }
 
 func genID() {
@@ -49,110 +64,16 @@ func genID() {
 	fmt.Println("your id is:", id)
 }
 
-func process() {
-	for {
-		select {
-		case p := <-recvChan:
-			log.Printf("%d: %s\n", p.PlayerID, string(p.Body))
-		case s := <-sendChan:
-			conn.Write(genPacket(s).Marshal())
-		}
-	}
-}
-
 func input() {
 	s := ""
 	for {
 		if n, err := fmt.Scan(&s); n == 0 || err != nil {
 			break
 		}
-		sendChan <- s
-	}
-}
-
-func run() {
-	var head PacketHead
-	var recvBuf []byte
-	recvBufLen := 0
-	buf := make([]byte, tcpsock.RecvBufLenMax)
-	for {
-		count, err := conn.Read(buf)
-		if err != nil {
+		if tcpConn == nil {
 			break
 		}
-
-		if count+recvBufLen > tcpsock.RecvBufLenMax {
-			continue
-		}
-
-		recvBuf = append(recvBuf, buf[0:count]...)
-		recvBufLen += count
-		offsize := 0
-		offset := 0
-		for recvBufLen-offsize > PacketHeadSize {
-			offset = 0
-			head.Signature = uint32(uint32(recvBuf[offsize+3])<<24 | uint32(recvBuf[offsize+2])<<16 | uint32(recvBuf[offsize+1])<<8 | uint32(recvBuf[offsize+0]))
-			offset += 4
-			head.PlayerID = uint32(uint32(recvBuf[offsize+offset+3])<<24 | uint32(recvBuf[offsize+offset+2])<<16 | uint32(recvBuf[offsize+offset+1])<<8 | uint32(recvBuf[offsize+offset+0]))
-			offset += 4
-			head.BodyLen = uint32(uint32(recvBuf[offsize+offset+3])<<24 | uint32(recvBuf[offsize+offset+2])<<16 | uint32(recvBuf[offsize+offset+1])<<8 | uint32(recvBuf[offsize+offset+0]))
-			offset += 4
-			if head.Signature == ChatSignature {
-				pkglen := int(PacketHeadSize + head.BodyLen)
-				if pkglen >= tcpsock.RecvBufLenMax {
-					offsize = recvBufLen
-					break
-				}
-				if offsize+pkglen > recvBufLen {
-					break
-				}
-
-				pkt := NewChatPacket(head, recvBuf[offsize+offset:offsize+offset+int(head.BodyLen)])
-				log.Printf("%d: %s\n", pkt.PlayerID, string(pkt.Body))
-
-				offsize += pkglen
-			} else {
-				offsize++
-			}
-		}
-
-		recvBufLen -= offsize
-		if recvBufLen > 0 {
-			recvBuf = recvBuf[offsize : offsize+recvBufLen]
-		} else {
-			recvBuf = nil
-		}
-	}
-}
-
-type PacketHead struct {
-	Signature uint32
-	PlayerID  uint32
-	BodyLen   uint32
-}
-
-func (head *PacketHead) Bytes() []byte {
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.LittleEndian, head)
-	return buf.Bytes()
-}
-
-type ChatPacket struct {
-	PacketHead
-	Body []byte
-}
-
-func (p *ChatPacket) Marshal() []byte {
-	buf := make([]byte, PacketHeadSize+len(p.Body))
-	copy(buf[:PacketHeadSize], p.PacketHead.Bytes()[:])
-	copy(buf[PacketHeadSize:], p.Body[:])
-	return buf
-}
-
-func NewChatPacket(head PacketHead, body []byte) *ChatPacket {
-	return &ChatPacket{
-		PacketHead: head,
-		Body:       body,
+		tcpConn.Write(genPacket(s))
 	}
 }
 
