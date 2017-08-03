@@ -2,14 +2,14 @@
 Package tcpsock provides easy to use interfaces for TCP I/O.</br></br>
 
 # How to use</br>
-##server:
+## server:
 proto := &YourCustomProtocol{}</br>
 server := tcpsock.NewTcpServer(listenPort, acceptTimeout, proto)</br>
 go server.Serve()</br>
 <-shutdown</br>
 server.Close()</br></br>
-##client:
-proto := &ChatProtocol{}</br>
+## client:
+proto := &YourCustomProtocol{}</br>
 proto.OnMessage(onMsg)</br>
 client := tcpsock.NewTcpClient(ServerAddr, proto)</br>
 client.OnConnect(onConnect)</br>
