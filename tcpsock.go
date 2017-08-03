@@ -7,19 +7,26 @@
 // and getty(https://github.com/AlexStocks/getty).
 package tcpsock
 
+import (
+	"sync"
+)
+
 const (
 	RecvBufLenMax = 4 * 1024
 	SendBufLenMax = 4 * 1024
 
-	cSendBufCap = 10
-	cRecvBufCap = 10
+	SendBufCapMax = 10
+	RecvBufCapMax = 10
 )
 
 type tcpSock struct {
-	sendBufCap uint32
-	recvBufCap uint32
-	proto      Protocol
-	exitChan   chan struct{}
+	sendBufCap    uint32
+	recvBufCap    uint32
+	proto         Protocol
+	exitChan      chan struct{}
+	waitGroup     *sync.WaitGroup
+	onConnConnect OnTcpConnCallback
+	onConnClose   OnTcpConnCallback
 }
 
 type Protocol interface {
