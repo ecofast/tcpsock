@@ -1,3 +1,6 @@
+// Copyright (C) 2017 ecofast(胡光耀). All rights reserved.
+// Use of this source code is governed by a BSD-style license.
+
 package tcpsock
 
 import (
@@ -9,16 +12,12 @@ import (
 	. "github.com/ecofast/sysutils"
 )
 
-type OnTcpConnCallback func(c *TcpConn)
-
 type TcpServer struct {
 	listener      *net.TCPListener
 	acceptTimeout int
 	*tcpSock
-	numOfConn     uint32
-	waitGroup     *sync.WaitGroup
-	onConnConnect OnTcpConnCallback
-	onConnClose   OnTcpConnCallback
+	autoIncID uint32
+	numOfConn uint32
 }
 
 func NewTcpServer(listenPort, acceptTimeout int, protocol Protocol) *TcpServer {
@@ -31,19 +30,14 @@ func NewTcpServer(listenPort, acceptTimeout int, protocol Protocol) *TcpServer {
 		listener:      listener,
 		acceptTimeout: acceptTimeout,
 		tcpSock: &tcpSock{
-			sendBufCap: cSendBufCap,
-			recvBufCap: cRecvBufCap,
+			sendBufCap: SendBufCapMax,
+			recvBufCap: RecvBufCapMax,
 			proto:      protocol,
 			exitChan:   make(chan struct{}),
+			waitGroup:  &sync.WaitGroup{},
 		},
-		numOfConn: 0,
-		waitGroup: &sync.WaitGroup{},
 	}
 }
-
-var (
-	connID uint32 // uint64
-)
 
 func (self *TcpServer) Serve() {
 	self.waitGroup.Add(1)
@@ -69,7 +63,7 @@ func (self *TcpServer) Serve() {
 		atomic.AddUint32(&self.numOfConn, 1)
 		self.waitGroup.Add(1)
 		go func() {
-			c := newTcpConn(atomic.AddUint32(&connID, 1), self, conn, self.sendBufCap, self.recvBufCap)
+			c := newTcpConn(atomic.AddUint32(&self.autoIncID, 1), self.tcpSock, conn, self.sendBufCap, self.recvBufCap, self.connClose)
 			if self.onConnConnect != nil {
 				self.onConnConnect(c)
 			}
