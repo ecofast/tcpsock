@@ -58,7 +58,7 @@ func broadcast() {
 	defer mutex.Unlock()
 	packet := genChatPacket()
 	for _, c := range clients {
-		c.Send(packet)
+		c.Write(packet)
 	}
 }
 
@@ -66,7 +66,7 @@ func onMsg(conn *tcpsock.TcpConn, p *ChatPacket) {
 	mutex.Lock()
 	defer mutex.Unlock()
 	for _, c := range clients {
-		c.Send(p)
+		c.Write(p)
 	}
 }
 
