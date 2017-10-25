@@ -20,13 +20,13 @@ const (
 )
 
 type tcpSock struct {
-	sendBufCap    uint32
-	recvBufCap    uint32
-	proto         Protocol
-	exitChan      chan struct{}
-	waitGroup     *sync.WaitGroup
-	onConnConnect OnTcpConnCallback
-	onConnClose   OnTcpConnCallback
+	sendBufCap       uint32
+	recvBufCap       uint32
+	exitChan         chan struct{}
+	waitGroup        *sync.WaitGroup
+	onConnConnect    OnTcpConnCallback
+	onConnClose      OnTcpConnCallback
+	onCustomProtocol OnTcpCustomProtocol
 }
 
 type Protocol interface {

@@ -11,25 +11,29 @@ import (
 
 type OnTcpConnCallback func(c *TcpConn)
 
+type OnTcpCustomProtocol func() Protocol
+
 type TcpConn struct {
 	id         uint32
 	owner      *tcpSock
 	conn       *net.TCPConn
 	sendChan   chan Packet
 	recvChan   chan Packet
+	proto      Protocol
 	closeChan  chan struct{}
 	closeOnce  sync.Once
 	closedFlag int32
 	onClose    OnTcpConnCallback
 }
 
-func newTcpConn(id uint32, owner *tcpSock, conn *net.TCPConn, sendCap, recvCap uint32, onClose OnTcpConnCallback) *TcpConn {
+func newTcpConn(id uint32, owner *tcpSock, conn *net.TCPConn, sendCap, recvCap uint32, proto Protocol, onClose OnTcpConnCallback) *TcpConn {
 	return &TcpConn{
 		id:        id,
 		owner:     owner,
 		conn:      conn,
 		sendChan:  make(chan Packet, sendCap),
 		recvChan:  make(chan Packet, recvCap),
+		proto:     proto,
 		closeChan: make(chan struct{}),
 		onClose:   onClose,
 	}
@@ -96,7 +100,7 @@ func (self *TcpConn) reader() {
 		if err != nil {
 			return
 		}
-		self.owner.proto.Parse(buf[:count], self.recvChan)
+		self.proto.Parse(buf[:count], self.recvChan)
 	}
 }
 
@@ -145,7 +149,7 @@ func (self *TcpConn) handler() {
 			return
 
 		case packet := <-self.recvChan:
-			self.owner.proto.Process(self, packet)
+			self.proto.Process(self, packet)
 		}
 	}
 }

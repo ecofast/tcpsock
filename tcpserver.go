@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	. "github.com/ecofast/sysutils"
+	. "github.com/ecofast/rtl/sysutils"
 )
 
 type TcpServer struct {
@@ -20,21 +20,27 @@ type TcpServer struct {
 	numOfConn uint32
 }
 
-func NewTcpServer(listenPort, acceptTimeout int, protocol Protocol) *TcpServer {
+func NewTcpServer(listenPort, acceptTimeout int, onConnConnect, onConnClose OnTcpConnCallback, onCustomProtocol OnTcpCustomProtocol) *TcpServer {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", ":"+IntToStr(int(listenPort)))
 	CheckError(err)
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	CheckError(err)
 
+	if onCustomProtocol == nil {
+		panic("tcpsock.NewTcpServer: invalid custom protocol")
+	}
+
 	return &TcpServer{
 		listener:      listener,
 		acceptTimeout: acceptTimeout,
 		tcpSock: &tcpSock{
-			sendBufCap: SendBufCapMax,
-			recvBufCap: RecvBufCapMax,
-			proto:      protocol,
-			exitChan:   make(chan struct{}),
-			waitGroup:  &sync.WaitGroup{},
+			sendBufCap:       SendBufCapMax,
+			recvBufCap:       RecvBufCapMax,
+			exitChan:         make(chan struct{}),
+			waitGroup:        &sync.WaitGroup{},
+			onConnConnect:    onConnConnect,
+			onConnClose:      onConnClose,
+			onCustomProtocol: onCustomProtocol,
 		},
 	}
 }
@@ -63,7 +69,7 @@ func (self *TcpServer) Serve() {
 		atomic.AddUint32(&self.numOfConn, 1)
 		self.waitGroup.Add(1)
 		go func() {
-			c := newTcpConn(atomic.AddUint32(&self.autoIncID, 1), self.tcpSock, conn, self.sendBufCap, self.recvBufCap, self.connClose)
+			c := newTcpConn(atomic.AddUint32(&self.autoIncID, 1), self.tcpSock, conn, self.sendBufCap, self.recvBufCap, self.onCustomProtocol(), self.connClose)
 			if self.onConnConnect != nil {
 				self.onConnConnect(c)
 			}
@@ -87,12 +93,4 @@ func (self *TcpServer) connClose(conn *TcpConn) {
 	if self.onConnClose != nil {
 		self.onConnClose(conn)
 	}
-}
-
-func (self *TcpServer) OnConnConnect(fn OnTcpConnCallback) {
-	self.onConnConnect = fn
-}
-
-func (self *TcpServer) OnConnClose(fn OnTcpConnCallback) {
-	self.onConnClose = fn
 }
