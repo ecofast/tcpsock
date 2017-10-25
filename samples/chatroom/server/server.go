@@ -1,16 +1,19 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
-	"tcpsock"
-	. "tcpsock/samples/chatroom/protocol"
 	"time"
 
-	. "github.com/ecofast/sysutils"
+	. "github.com/ecofast/rtl/netutils"
+
+	"github.com/ecofast/tcpsock"
+
+	. "github.com/ecofast/tcpsock/samples/chatroom/protocol"
 )
 
 var (
@@ -29,8 +32,30 @@ func init() {
 	}()
 }
 
+func main() {
+	clients = make(map[uint32]*tcpsock.TcpConn)
+
+	server := tcpsock.NewTcpServer(9999, 5, onConnConnect, onConnClose, onProtocol)
+	log.Println("=====service start=====")
+	go server.Serve()
+
+	ticker := time.NewTicker(2 * time.Minute)
+	go func() {
+		for range ticker.C {
+			//log.Printf("num of conn: %d\n", server.NumOfConn())
+			// broadcast()
+		}
+	}()
+
+	<-shutdown
+	log.Println("server shutdown...")
+	server.Close()
+	log.Println("=====service end=====")
+}
+
 func onConnConnect(conn *tcpsock.TcpConn) {
-	// conn.Send(genChatPacket())
+	conn.Write(genChatPacket("master01", fmt.Sprintf("Welcome! Your IP is %s", IPFromNetAddr(conn.RawConn().RemoteAddr()))))
+
 	mutex.Lock()
 	defer mutex.Unlock()
 	clients[conn.ID()] = conn
@@ -42,27 +67,9 @@ func onConnClose(conn *tcpsock.TcpConn) {
 	delete(clients, conn.ID())
 }
 
-func genChatPacket() *ChatPacket {
-	var head PacketHead
-	head.Signature = ChatSignature
-	head.PlayerID = 555555555
-	s := "current time is " + TimeToStr(time.Now())
-	head.BodyLen = uint32(len(s))
-	body := make([]byte, int(head.BodyLen))
-	copy(body[:], []byte(s)[:])
-	return NewChatPacket(head, body)
-}
-
-func broadcast() {
-	mutex.Lock()
-	defer mutex.Unlock()
-	packet := genChatPacket()
-	for _, c := range clients {
-		c.Write(packet)
-	}
-}
-
 func onMsg(conn *tcpsock.TcpConn, p *ChatPacket) {
+	fmt.Println(p)
+
 	mutex.Lock()
 	defer mutex.Unlock()
 	for _, c := range clients {
@@ -70,26 +77,26 @@ func onMsg(conn *tcpsock.TcpConn, p *ChatPacket) {
 	}
 }
 
-func main() {
-	clients = make(map[uint32]*tcpsock.TcpConn)
-
+func onProtocol() tcpsock.Protocol {
 	proto := &ChatProtocol{}
 	proto.OnMessage(onMsg)
-	server := tcpsock.NewTcpServer(9999, 2, proto)
-	server.OnConnConnect(onConnConnect)
-	server.OnConnClose(onConnClose)
-	log.Println("=====service start=====")
-	go server.Serve()
+	return proto
+}
 
-	ticker := time.NewTicker(10 * time.Second)
-	go func() {
-		for range ticker.C {
-			log.Printf("num of conn: %d\n", server.NumOfConn())
-			broadcast()
-		}
-	}()
+func genChatPacket(userName, words string) *ChatPacket {
+	var head PacketHead
+	head.Signature = ChatSignature
+	copy(head.UserName[:], ([]byte(userName[:]))[:])
+	body := []byte(words)
+	head.BodyLen = uint32(len(body))
+	return NewChatPacket(head, body)
+}
 
-	<-shutdown
-	server.Close()
-	log.Println("=====service end=====")
+func broadcast() {
+	mutex.Lock()
+	defer mutex.Unlock()
+	packet := genChatPacket("master01", "broadcast test")
+	for _, c := range clients {
+		c.Write(packet)
+	}
 }
