@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"tcpsock"
 	"time"
+
+	"github.com/ecofast/tcpsock"
 
 	. "github.com/ecofast/rtl/timeutils"
 )
