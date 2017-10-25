@@ -3,17 +3,22 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"tcpsock"
+	"time"
+
+	. "github.com/ecofast/rtl/timeutils"
 )
 
 const (
 	ChatSignature  = 0xFFFFFFFF
-	PacketHeadSize = 4 + 4 + 4
+	MaxUserNameLen = 8
+	PacketHeadSize = 4 + MaxUserNameLen + 4
 )
 
 type PacketHead struct {
 	Signature uint32
-	PlayerID  uint32
+	UserName  [MaxUserNameLen]byte
 	BodyLen   uint32
 }
 
@@ -42,6 +47,10 @@ func (p *ChatPacket) Marshal() []byte {
 	return buf
 }
 
+func (self *ChatPacket) String() string {
+	return fmt.Sprintf("%s %s: %s", DateTimeToStr(time.Now()), string(self.UserName[:]), string(self.Body))
+}
+
 type ChatProtocol struct {
 	recvBuf    []byte
 	recvBufLen int
@@ -63,8 +72,8 @@ func (self *ChatProtocol) Parse(b []byte, recvChan chan<- tcpsock.Packet) {
 		offset = 0
 		head.Signature = uint32(uint32(self.recvBuf[offsize+3])<<24 | uint32(self.recvBuf[offsize+2])<<16 | uint32(self.recvBuf[offsize+1])<<8 | uint32(self.recvBuf[offsize+0]))
 		offset += 4
-		head.PlayerID = uint32(uint32(self.recvBuf[offsize+offset+3])<<24 | uint32(self.recvBuf[offsize+offset+2])<<16 | uint32(self.recvBuf[offsize+offset+1])<<8 | uint32(self.recvBuf[offsize+offset+0]))
-		offset += 4
+		copy(head.UserName[:], self.recvBuf[offsize+offset:offsize+offset+MaxUserNameLen])
+		offset += MaxUserNameLen
 		head.BodyLen = uint32(uint32(self.recvBuf[offsize+offset+3])<<24 | uint32(self.recvBuf[offsize+offset+2])<<16 | uint32(self.recvBuf[offsize+offset+1])<<8 | uint32(self.recvBuf[offsize+offset+0]))
 		offset += 4
 		if head.Signature == ChatSignature {
@@ -77,7 +86,7 @@ func (self *ChatProtocol) Parse(b []byte, recvChan chan<- tcpsock.Packet) {
 				break
 			}
 
-			recvChan <- NewChatPacket(head, self.recvBuf[offsize+offset:offsize+offset+int(head.BodyLen)])
+			recvChan <- NewChatPacket(head, self.recvBuf[offsize+offset : offsize+offset+int(head.BodyLen)][:])
 			offsize += pkglen
 		} else {
 			offsize++
