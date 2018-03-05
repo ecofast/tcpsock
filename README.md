@@ -16,6 +16,6 @@ go client.Run()
 <-shutdown
 client.Close()
 ```
-There're more detailed demos which use custom binary protocols, like:</br>
+## There're more detailed demos which use custom binary protocols, like:</br>
 * [chatroom](https://github.com/ecofast/tcpsock/tree/master/samples/chatroom)</br>
 * [tcpping](https://github.com/ecofast/tcpsock/tree/master/samples/tcpping)</br>
