@@ -18,5 +18,5 @@ client.Close()
 ```
 </br>
 There're more detailed demos which use custom binary protocols, like:</br>
-* [chatroom](https://github.com/ecofast/tcpsock/tree/master/samples/chatroom)
-* [tcpping(https://github.com/ecofast/tcpsock/tree/master/samples/tcpping)
+  * [chatroom](https://github.com/ecofast/tcpsock/tree/master/samples/chatroom)</br>
+  * [tcpping(https://github.com/ecofast/tcpsock/tree/master/samples/tcpping)</br>
