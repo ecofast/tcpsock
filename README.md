@@ -3,14 +3,18 @@ Package tcpsock provides easy to use interfaces for TCP I/O.</br></br>
 
 # How to use</br>
 ## server:
-server := tcpsock.NewTcpServer(listenPort, acceptTimeout, onConnConnect, onConnClose, onProtocol)</br>
-go server.Serve()</br>
-<-shutdown</br>
-server.Close()</br></br>
+```Go
+server := tcpsock.NewTcpServer(listenPort, acceptTimeout, onConnConnect, onConnClose, onProtocol)
+go server.Serve()
+<-shutdown
+server.Close()
+```
 ## client:
-client := tcpsock.NewTcpClient(ServerAddr, onConnect, onClose, onProtocol)</br>
-go client.Run()</br>
-<-shutdown</br>
-client.Close()</br></br>
-
-There's a more detailed [chatroom](https://github.com/ecofast/tcpsock/tree/master/samples/chatroom) demo available which uses a custom binary protocol.
+```Go
+client := tcpsock.NewTcpClient(ServerAddr, onConnect, onClose, onProtocol)
+go client.Run()
+<-shutdown
+client.Close()
+```
+</br>
+There're more detailed [chatroom](https://github.com/ecofast/tcpsock/tree/master/samples/chatroom) and [tcpping](https://github.com/ecofast/tcpsock/tree/master/samples/tcpping) demos available which use custom binary protocol(s).
